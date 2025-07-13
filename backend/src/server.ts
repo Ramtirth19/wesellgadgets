@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
+import path from 'path';
 
 import { connectDB } from './config/database';
 import { errorHandler } from './middleware/errorHandler';
@@ -20,7 +21,6 @@ import categoryRoutes from './routes/categories';
 import orderRoutes from './routes/orders';
 import paymentRoutes from './routes/payments';
 import uploadRoutes from './routes/upload';
-// import analyticsRoutes from './routes/analytics';
 
 dotenv.config();
 
@@ -64,6 +64,9 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Health check
 app.get('/health', (_req, res) => {
   res.status(200).json({
@@ -81,7 +84,6 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/upload', uploadRoutes);
-// app.use('/api/analytics', analyticsRoutes);
 
 // Socket.IO for real-time features
 io.on('connection', (socket) => {
@@ -109,6 +111,7 @@ const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
 });
 
 export { io };

@@ -24,14 +24,54 @@ import ProductCard from '../components/product/ProductCard';
 
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { products } = useProductStore();
+  const { products, fetchProductById } = useProductStore();
   const { addItem } = useCartStore();
   
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'description' | 'specifications' | 'reviews'>('description');
 
-  const product = products.find(p => p.id === id);
+  useEffect(() => {
+    const loadProduct = async () => {
+      if (!id) return;
+      
+      setLoading(true);
+      try {
+        // First try to find in existing products
+        const existingProduct = products.find(p => p.id === id);
+        if (existingProduct) {
+          setProduct(existingProduct);
+          setLoading(false);
+          return;
+        }
+        
+        // If not found, fetch from API
+        const fetchedProduct = await fetchProductById(id);
+        if (fetchedProduct) {
+          setProduct(fetchedProduct);
+        }
+      } catch (error) {
+        console.error('Failed to load product:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProduct();
+  }, [id, products, fetchProductById]);
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading product...</p>
+        </div>
+      </div>
+    );
+  }
   
   if (!product) {
     return (

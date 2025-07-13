@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useProductStore } from './store';
-import { mockProducts, mockCategories } from './data/mockData';
+import { useAuthStore, useProductStore } from './store';
 import ScrollToTop from './components/ui/ScrollToTop';
 
 // Layout Components
@@ -34,13 +33,28 @@ import UserManagementPage from './pages/admin/UserManagementPage';
 import SettingsPage from './pages/admin/SettingsPage';
 
 const App: React.FC = () => {
-  const { setProducts, setCategories } = useProductStore();
+  const { checkAuth } = useAuthStore();
+  const { fetchProducts, fetchCategories } = useProductStore();
 
   useEffect(() => {
-    // Initialize with mock data
-    setProducts(mockProducts);
-    setCategories(mockCategories);
-  }, [setProducts, setCategories]);
+    // Initialize app data
+    const initializeApp = async () => {
+      try {
+        // Check authentication status
+        await checkAuth();
+        
+        // Fetch initial data
+        await Promise.all([
+          fetchProducts(),
+          fetchCategories()
+        ]);
+      } catch (error) {
+        console.error('Failed to initialize app:', error);
+      }
+    };
+
+    initializeApp();
+  }, [checkAuth, fetchProducts, fetchCategories]);
 
   return (
     <Router>
