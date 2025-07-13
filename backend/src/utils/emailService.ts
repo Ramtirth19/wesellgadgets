@@ -5,7 +5,7 @@ import { IOrder } from '../models/Order';
 const createTransporter = () => {
   if (process.env.NODE_ENV === 'production') {
     // Production email service (e.g., SendGrid, AWS SES)
-    return nodemailer.createTransporter({
+    return nodemailer.createTransport({
       service: 'SendGrid',
       auth: {
         user: process.env.SENDGRID_USERNAME,
@@ -14,7 +14,7 @@ const createTransporter = () => {
     });
   } else {
     // Development - use Ethereal Email for testing
-    return nodemailer.createTransporter({
+    return nodemailer.createTransport({
       host: 'smtp.ethereal.email',
       port: 587,
       auth: {
