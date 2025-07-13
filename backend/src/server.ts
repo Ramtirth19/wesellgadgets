@@ -14,15 +14,24 @@ import { notFound } from './middleware/notFound';
 
 // Routes
 import authRoutes from './routes/auth';
-// import userRoutes from './routes/users';
+import userRoutes from './routes/users';
 import productRoutes from './routes/products';
-// import categoryRoutes from './routes/categories';
+import categoryRoutes from './routes/categories';
 import orderRoutes from './routes/orders';
 import paymentRoutes from './routes/payments';
-// import uploadRoutes from './routes/upload';
+import uploadRoutes from './routes/upload';
 // import analyticsRoutes from './routes/analytics';
 
 dotenv.config();
+
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: {
+      userId?: string;
+      role?: string;
+    };
+  }
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -66,12 +75,12 @@ app.get('/health', (_req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
-// app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
-// app.use('/api/categories', categoryRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
-// app.use('/api/upload', uploadRoutes);
+app.use('/api/upload', uploadRoutes);
 // app.use('/api/analytics', analyticsRoutes);
 
 // Socket.IO for real-time features

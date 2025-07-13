@@ -2,14 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
 
-interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    role: string;
-  };
-}
-
-export const auth = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const auth = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
 
@@ -31,11 +24,11 @@ export const auth = async (req: AuthRequest, res: Response, next: NextFunction) 
     }
 
     req.user = {
-      id: user._id.toString(),
+      userId: user.id.toString(),
       role: user.role
     };
 
-    next();
+    return next();
   } catch (error) {
     console.error('Auth middleware error:', error);
     res.status(401).json({
@@ -45,12 +38,13 @@ export const auth = async (req: AuthRequest, res: Response, next: NextFunction) 
   }
 };
 
-export const adminAuth = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const adminAuth = (req: Request, res: Response, next: NextFunction) => {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({
       success: false,
       message: 'Access denied. Admin privileges required.'
     });
   }
-  next();
+  
+  return next();
 };

@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export interface ICategory extends Document {
+export interface  ICategory extends Document {
   name: string;
   slug: string;
   description: string;
@@ -11,6 +11,7 @@ export interface ICategory extends Document {
   sortOrder: number;
   seoTitle?: string;
   seoDescription?: string;
+  createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
