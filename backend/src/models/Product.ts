@@ -8,7 +8,7 @@ export interface IProduct extends Document {
   condition: 'excellent' | 'good' | 'fair' | 'refurbished';
   category: mongoose.Types.ObjectId;
   brand: string;
-  model?: string;
+  productModel?: string;
   images: string[];
   specifications: Map<string, string>;
   features: string[];
@@ -73,7 +73,7 @@ const productSchema = new Schema<IProduct>({
     required: [true, 'Brand is required'],
     trim: true
   },
-  model: {
+  productModel: {
     type: String,
     trim: true
   },

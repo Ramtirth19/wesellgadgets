@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Filter, Grid, List, SlidersHorizontal } from 'lucide-react';
 import { useProductStore } from '../store';
-import { mockProducts, mockCategories } from '../data/mockData';
 import ProductCard from '../components/product/ProductCard';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -17,26 +16,32 @@ const ProductsPage: React.FC = () => {
   const {
     products,
     categories,
+    loading,
     filters,
     sortBy,
-    setProducts,
-    setCategories,
+    fetchProducts,
     updateFilters,
     setSortBy,
     getFilteredProducts,
   } = useProductStore();
 
   useEffect(() => {
-    // Initialize with mock data
-    setProducts(mockProducts);
-    setCategories(mockCategories);
-    
-    // Apply URL parameters
+    // Apply URL parameters and fetch products
     const category = searchParams.get('category');
+    const search = searchParams.get('search');
+    
+    const fetchFilters: any = {};
+    if (category) fetchFilters.category = category;
+    if (search) fetchFilters.search = search;
+    
+    // Update local filters
     if (category) {
       updateFilters({ category });
     }
-  }, [setProducts, setCategories, searchParams, updateFilters]);
+    
+    // Fetch products with filters
+    fetchProducts(fetchFilters);
+  }, [searchParams, fetchProducts, updateFilters]);
 
   const filteredProducts = getFilteredProducts();
   const brands = [...new Set(products.map(p => p.brand))];
@@ -44,11 +49,47 @@ const ProductsPage: React.FC = () => {
 
   const handleFilterChange = (key: string, value: any) => {
     updateFilters({ [key]: value });
+    
+    // Apply filters and fetch new products
+    const newFilters = { ...filters, [key]: value };
+    const fetchFilters: any = {};
+    
+    if (newFilters.category) fetchFilters.category = newFilters.category;
+    if (newFilters.priceRange[0] > 0) fetchFilters.minPrice = newFilters.priceRange[0];
+    if (newFilters.priceRange[1] < 5000) fetchFilters.maxPrice = newFilters.priceRange[1];
+    if (newFilters.condition.length > 0) fetchFilters.condition = newFilters.condition;
+    if (newFilters.brand.length > 0) fetchFilters.brand = newFilters.brand;
+    if (newFilters.inStock) fetchFilters.inStock = newFilters.inStock;
+    
+    fetchProducts(fetchFilters);
   };
 
   const handlePriceRangeChange = (min: number, max: number) => {
-    updateFilters({ priceRange: [min, max] });
+    const newPriceRange: [number, number] = [min, max];
+    updateFilters({ priceRange: newPriceRange });
+    
+    const fetchFilters: any = { ...filters };
+    if (min > 0) fetchFilters.minPrice = min;
+    if (max < 5000) fetchFilters.maxPrice = max;
+    
+    fetchProducts(fetchFilters);
   };
+
+  const handleSortChange = (newSortBy: string) => {
+    setSortBy(newSortBy as any);
+    fetchProducts({ ...filters, sort: newSortBy });
+  };
+
+  if (loading && products.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading products...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -83,7 +124,7 @@ const ProductsPage: React.FC = () => {
               {/* Sort Dropdown */}
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => handleSortChange(e.target.value)}
                 className="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="newest">Newest First</option>
@@ -241,7 +282,12 @@ const ProductsPage: React.FC = () => {
 
           {/* Products Grid */}
           <div className="flex-1">
-            {filteredProducts.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading products...</p>
+              </div>
+            ) : filteredProducts.length === 0 ? (
               <Card className="p-12 text-center">
                 <div className="text-gray-400 mb-4">
                   <Filter className="w-16 h-16 mx-auto" />
@@ -261,6 +307,7 @@ const ProductsPage: React.FC = () => {
                       brand: [],
                       inStock: false,
                     });
+                    fetchProducts();
                   }}
                 >
                   Clear Filters

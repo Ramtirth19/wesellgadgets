@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import productService from '../services/productService';
+import categoryService from '../services/categoryService';
+import authService from '../services/authService';
+import orderService from '../services/orderService';
 
 // Types
 export interface Product {
@@ -63,9 +67,11 @@ export interface Category {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  loading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   register: (email: string, password: string, name: string) => Promise<boolean>;
+  checkAuth: () => Promise<void>;
 }
 
 interface CartState {
@@ -83,6 +89,8 @@ interface CartState {
 interface ProductState {
   products: Product[];
   categories: Category[];
+  loading: boolean;
+  error: string | null;
   filters: {
     category: string;
     priceRange: [number, number];
@@ -92,8 +100,9 @@ interface ProductState {
   };
   sortBy: 'name' | 'price-low' | 'price-high' | 'rating' | 'newest';
   searchQuery: string;
-  setProducts: (products: Product[]) => void;
-  setCategories: (categories: Category[]) => void;
+  fetchProducts: (filters?: any) => Promise<void>;
+  fetchCategories: () => Promise<void>;
+  fetchProductById: (id: string) => Promise<Product | null>;
   updateFilters: (filters: Partial<ProductState['filters']>) => void;
   setSortBy: (sortBy: ProductState['sortBy']) => void;
   setSearchQuery: (query: string) => void;
@@ -102,20 +111,21 @@ interface ProductState {
 
 interface AdminState {
   orders: Order[];
+  loading: boolean;
   stats: {
     totalOrders: number;
     totalRevenue: number;
     totalProducts: number;
     totalUsers: number;
   };
-  setOrders: (orders: Order[]) => void;
-  updateOrderStatus: (orderId: string, status: Order['status']) => void;
-  addProduct: (product: Omit<Product, 'id' | 'createdAt'>) => void;
-  updateProduct: (id: string, product: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
-  addCategory: (category: Omit<Category, 'id'>) => void;
-  updateCategory: (id: string, category: Partial<Category>) => void;
-  deleteCategory: (id: string) => void;
+  fetchOrders: () => Promise<void>;
+  updateOrderStatus: (orderId: string, status: Order['status']) => Promise<void>;
+  addProduct: (product: Omit<Product, 'id' | 'createdAt'>) => Promise<void>;
+  updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  addCategory: (category: Omit<Category, 'id'>) => Promise<void>;
+  updateCategory: (id: string, category: Partial<Category>) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
 }
 
 // Auth Store
@@ -125,49 +135,80 @@ export const useAuthStore = create<AuthState>()(
       (set, get) => ({
         user: null,
         isAuthenticated: false,
+        loading: false,
+        
         login: async (email: string, password: string) => {
-          // Dummy authentication
-          if (email === 'admin@techvault.com' && password === 'admin123') {
-            const user: User = {
-              id: '1',
-              email,
-              name: 'Admin User',
-              role: 'admin',
-            };
-            set({ user, isAuthenticated: true });
-            return true;
-          } else if (email && password) {
-            const user: User = {
-              id: '2',
-              email,
-              name: 'Customer User',
-              role: 'customer',
-            };
-            set({ user, isAuthenticated: true });
-            return true;
+          set({ loading: true });
+          try {
+            const response = await authService.login(email, password);
+            if (response.success && response.data) {
+              set({ 
+                user: response.data.user, 
+                isAuthenticated: true,
+                loading: false 
+              });
+              return true;
+            }
+            set({ loading: false });
+            return false;
+          } catch (error) {
+            set({ loading: false });
+            return false;
           }
-          return false;
         },
-        logout: () => {
+        
+        logout: async () => {
+          await authService.logout();
           set({ user: null, isAuthenticated: false });
         },
+        
         register: async (email: string, password: string, name: string) => {
-          // Dummy registration
-          if (email && password && name) {
-            const user: User = {
-              id: Date.now().toString(),
-              email,
-              name,
-              role: 'customer',
-            };
-            set({ user, isAuthenticated: true });
-            return true;
+          set({ loading: true });
+          try {
+            const response = await authService.register(name, email, password);
+            if (response.success && response.data) {
+              set({ 
+                user: response.data.user, 
+                isAuthenticated: true,
+                loading: false 
+              });
+              return true;
+            }
+            set({ loading: false });
+            return false;
+          } catch (error) {
+            set({ loading: false });
+            return false;
           }
-          return false;
+        },
+        
+        checkAuth: async () => {
+          if (!authService.isAuthenticated()) {
+            set({ user: null, isAuthenticated: false });
+            return;
+          }
+          
+          try {
+            const response = await authService.getCurrentUser();
+            if (response.success && response.data) {
+              set({ 
+                user: response.data.user, 
+                isAuthenticated: true 
+              });
+            } else {
+              set({ user: null, isAuthenticated: false });
+            }
+          } catch (error) {
+            set({ user: null, isAuthenticated: false });
+          }
         },
       }),
       {
         name: 'auth-storage',
+        partialize: (state) => ({ 
+          user: state.user, 
+          isAuthenticated: state.isAuthenticated 
+        }),
       }
     )
   )
@@ -240,6 +281,8 @@ export const useProductStore = create<ProductState>()(
   devtools((set, get) => ({
     products: [],
     categories: [],
+    loading: false,
+    error: null,
     filters: {
       category: '',
       priceRange: [0, 5000],
@@ -249,15 +292,65 @@ export const useProductStore = create<ProductState>()(
     },
     sortBy: 'newest',
     searchQuery: '',
-    setProducts: (products) => set({ products }),
-    setCategories: (categories) => set({ categories }),
+    
+    fetchProducts: async (filters = {}) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await productService.getProducts(filters);
+        if (response.success && response.data) {
+          set({ 
+            products: response.data.products,
+            loading: false 
+          });
+        } else {
+          set({ 
+            products: [],
+            loading: false,
+            error: 'Failed to fetch products'
+          });
+        }
+      } catch (error: any) {
+        set({ 
+          loading: false, 
+          error: error.message || 'Failed to fetch products' 
+        });
+      }
+    },
+    
+    fetchCategories: async () => {
+      try {
+        const response = await categoryService.getCategories();
+        const categories = response.categories || response.data || [];
+        set({ categories });
+      } catch (error: any) {
+        console.error('Failed to fetch categories:', error);
+        set({ categories: [] });
+      }
+    },
+    
+    fetchProductById: async (id: string) => {
+      try {
+        const response = await productService.getProductById(id);
+        if (response.success && response.data) {
+          return response.data.product;
+        }
+        return null;
+      } catch (error) {
+        console.error('Failed to fetch product:', error);
+        return null;
+      }
+    },
+    
     updateFilters: (newFilters) => {
       set({
         filters: { ...get().filters, ...newFilters },
       });
     },
+    
     setSortBy: (sortBy) => set({ sortBy }),
+    
     setSearchQuery: (searchQuery) => set({ searchQuery }),
+    
     getFilteredProducts: () => {
       const { products, filters, sortBy, searchQuery } = get();
       let filtered = [...products];
@@ -324,72 +417,130 @@ export const useProductStore = create<ProductState>()(
 export const useAdminStore = create<AdminState>()(
   devtools((set, get) => ({
     orders: [],
+    loading: false,
     stats: {
       totalOrders: 0,
       totalRevenue: 0,
       totalProducts: 0,
       totalUsers: 0,
     },
-    setOrders: (orders) => {
-      const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
-      set({
-        orders,
-        stats: {
-          ...get().stats,
-          totalOrders: orders.length,
-          totalRevenue,
-        },
-      });
+    
+    fetchOrders: async () => {
+      set({ loading: true });
+      try {
+        const response = await orderService.getAllOrdersAdmin();
+        if (response.success && response.data) {
+          const orders = response.data.orders || [];
+          const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+          set({
+            orders,
+            loading: false,
+            stats: {
+              ...get().stats,
+              totalOrders: orders.length,
+              totalRevenue,
+            },
+          });
+        } else {
+          set({ loading: false });
+        }
+      } catch (error) {
+        set({ loading: false });
+        console.error('Failed to fetch orders:', error);
+      }
     },
-    updateOrderStatus: (orderId, status) => {
-      set({
-        orders: get().orders.map(order =>
-          order.id === orderId ? { ...order, status, updatedAt: new Date().toISOString() } : order
-        ),
-      });
+    
+    updateOrderStatus: async (orderId, status) => {
+      try {
+        const response = await orderService.updateOrderStatus(orderId, status);
+        if (response.success) {
+          set({
+            orders: get().orders.map(order =>
+              order.id === orderId ? { ...order, status, updatedAt: new Date().toISOString() } : order
+            ),
+          });
+        }
+      } catch (error) {
+        console.error('Failed to update order status:', error);
+      }
     },
-    addProduct: (productData) => {
-      const newProduct: Product = {
-        ...productData,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-      };
-      
-      const productStore = useProductStore.getState();
-      productStore.setProducts([...productStore.products, newProduct]);
+    
+    addProduct: async (productData) => {
+      try {
+        const response = await productService.createProduct(productData);
+        if (response.success) {
+          // Refresh products
+          const productStore = useProductStore.getState();
+          await productStore.fetchProducts();
+        }
+      } catch (error) {
+        console.error('Failed to add product:', error);
+      }
     },
-    updateProduct: (id, productData) => {
-      const productStore = useProductStore.getState();
-      const updatedProducts = productStore.products.map(product =>
-        product.id === id ? { ...product, ...productData } : product
-      );
-      productStore.setProducts(updatedProducts);
+    
+    updateProduct: async (id, productData) => {
+      try {
+        const response = await productService.updateProduct(id, productData);
+        if (response.success) {
+          // Refresh products
+          const productStore = useProductStore.getState();
+          await productStore.fetchProducts();
+        }
+      } catch (error) {
+        console.error('Failed to update product:', error);
+      }
     },
-    deleteProduct: (id) => {
-      const productStore = useProductStore.getState();
-      const updatedProducts = productStore.products.filter(product => product.id !== id);
-      productStore.setProducts(updatedProducts);
+    
+    deleteProduct: async (id) => {
+      try {
+        const response = await productService.deleteProduct(id);
+        if (response.success) {
+          // Refresh products
+          const productStore = useProductStore.getState();
+          await productStore.fetchProducts();
+        }
+      } catch (error) {
+        console.error('Failed to delete product:', error);
+      }
     },
-    addCategory: (categoryData) => {
-      const newCategory: Category = {
-        ...categoryData,
-        id: Date.now().toString(),
-      };
-      
-      const productStore = useProductStore.getState();
-      productStore.setCategories([...productStore.categories, newCategory]);
+    
+    addCategory: async (categoryData) => {
+      try {
+        const response = await categoryService.createCategory(categoryData);
+        if (response.success) {
+          // Refresh categories
+          const productStore = useProductStore.getState();
+          await productStore.fetchCategories();
+        }
+      } catch (error) {
+        console.error('Failed to add category:', error);
+      }
     },
-    updateCategory: (id, categoryData) => {
-      const productStore = useProductStore.getState();
-      const updatedCategories = productStore.categories.map(category =>
-        category.id === id ? { ...category, ...categoryData } : category
-      );
-      productStore.setCategories(updatedCategories);
+    
+    updateCategory: async (id, categoryData) => {
+      try {
+        const response = await categoryService.updateCategory(id, categoryData);
+        if (response.success) {
+          // Refresh categories
+          const productStore = useProductStore.getState();
+          await productStore.fetchCategories();
+        }
+      } catch (error) {
+        console.error('Failed to update category:', error);
+      }
     },
-    deleteCategory: (id) => {
-      const productStore = useProductStore.getState();
-      const updatedCategories = productStore.categories.filter(category => category.id !== id);
-      productStore.setCategories(updatedCategories);
+    
+    deleteCategory: async (id) => {
+      try {
+        const response = await categoryService.deleteCategory(id);
+        if (response.success) {
+          // Refresh categories
+          const productStore = useProductStore.getState();
+          await productStore.fetchCategories();
+        }
+      } catch (error) {
+        console.error('Failed to delete category:', error);
+      }
     },
   }))
 );

@@ -16,23 +16,32 @@ import {
   Tablet,
   TrendingUp,
   Users,
-  Award
+  Award,
+  Package
 } from 'lucide-react';
 import { useProductStore } from '../store';
-import { mockProducts, mockCategories } from '../data/mockData';
 import ProductCard from '../components/product/ProductCard';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 
 const HomePage: React.FC = () => {
-  const { products, categories, setProducts, setCategories } = useProductStore();
+  const { products, categories, loading, fetchProducts } = useProductStore();
 
   useEffect(() => {
-    // Initialize with mock data
-    setProducts(mockProducts);
-    setCategories(mockCategories);
-  }, [setProducts, setCategories]);
+    // Fetch featured products for homepage
+    const fetchFeaturedProducts = async () => {
+      try {
+        await fetchProducts({ featured: true, limit: 8 });
+      } catch (error) {
+        console.error('Failed to fetch featured products:', error);
+      }
+    };
+
+    if (products.length === 0) {
+      fetchFeaturedProducts();
+    }
+  }, [fetchProducts, products.length]);
 
   const featuredProducts = products.filter(product => product.featured).slice(0, 6);
   const categoryIcons = {
@@ -43,6 +52,17 @@ const HomePage: React.FC = () => {
     'Gaming Consoles': Gamepad2,
     'Tablets': Tablet,
   };
+
+  if (loading && products.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading amazing products...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -138,7 +158,7 @@ const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Featured Products - Moved to top */}
+      {/* Featured Products */}
       <section className="py-12 lg:py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -155,19 +175,26 @@ const HomePage: React.FC = () => {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.slice(0, 8).map((product, index) => (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <ProductCard product={product} />
-              </motion.div>
-            ))}
-          </div>
+          {featuredProducts.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {featuredProducts.map((product, index) => (
+                <motion.div
+                  key={product.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <ProductCard product={product} />
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No featured products available at the moment.</p>
+            </div>
+          )}
 
           <div className="text-center mt-8 lg:mt-12">
             <Link to="/products">
@@ -209,7 +236,7 @@ const HomePage: React.FC = () => {
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1 }}
                 >
-                  <Link to={`/products?category=${category.slug}`}>
+                  <Link to={`/products?category=${category.name}`}>
                     <Card hover className="text-center p-4 lg:p-6 group h-full">
                       <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-primary-500 to-accent-500 rounded-2xl flex items-center justify-center mx-auto mb-3 lg:mb-4 group-hover:scale-110 transition-transform">
                         <IconComponent className="w-6 h-6 lg:w-8 lg:h-8 text-white" />

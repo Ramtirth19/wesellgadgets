@@ -49,7 +49,7 @@ const uploadController = {
 
       const uploadedFiles: any[] = [];
 
-      for (const file of req.files) {
+      for (const file of (req.files as any)) {
         const newFile = new File({
           filename: file.filename,
           originalName: file.originalname,
