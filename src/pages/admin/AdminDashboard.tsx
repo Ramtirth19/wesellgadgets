@@ -11,20 +11,29 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAdminStore, useProductStore } from '../../store';
-import { mockOrders, mockProducts } from '../../data/mockData';
 import { formatPrice } from '../../utils/format';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 
 const AdminDashboard: React.FC = () => {
-  const { orders, stats, setOrders } = useAdminStore();
-  const { products, setProducts } = useProductStore();
+  const { orders, stats, fetchOrders } = useAdminStore();
+  const { products, fetchProducts } = useProductStore();
 
   useEffect(() => {
-    // Initialize with mock data
-    setOrders(mockOrders);
-    setProducts(mockProducts);
-  }, [setOrders, setProducts]);
+    // Fetch real data from API
+    const loadData = async () => {
+      try {
+        await Promise.all([
+          fetchOrders(),
+          fetchProducts()
+        ]);
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+      }
+    };
+    
+    loadData();
+  }, [fetchOrders, fetchProducts]);
 
   const recentOrders = orders.slice(0, 5);
   const lowStockProducts = products.filter(p => p.stockCount < 5);
