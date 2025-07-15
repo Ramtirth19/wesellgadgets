@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Plus, 
@@ -8,7 +8,9 @@ import {
   Trash2, 
   Eye,
   Package,
-  AlertCircle
+  AlertCircle,
+  Save,
+  X
 } from 'lucide-react';
 import { useProductStore, useAdminStore } from '../../store';
 import { formatPrice, formatCondition, getConditionColor } from '../../utils/format';
@@ -19,26 +21,35 @@ import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 
 const ProductManagementPage: React.FC = () => {
-  const { products } = useProductStore();
-  const { deleteProduct } = useAdminStore();
+  const { products, categories, fetchProducts, fetchCategories } = useProductStore();
+  const { addProduct, updateProduct, deleteProduct } = useAdminStore();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [productToEdit, setProductToEdit] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: '',
     description: '',
     price: '',
+    originalPrice: '',
     brand: '',
     category: '',
     condition: 'good',
     stockCount: '',
-    images: ['']
+    images: [''],
+    specifications: {} as Record<string, string>,
+    featured: false
   });
 
-  const categories = [...new Set(products.map(p => p.category))];
+  useEffect(() => {
+    fetchProducts();
+    fetchCategories();
+  }, [fetchProducts, fetchCategories]);
   
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -52,32 +63,144 @@ const ProductManagementPage: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (productToDelete) {
-      deleteProduct(productToDelete);
-      setShowDeleteModal(false);
-      setProductToDelete(null);
+      setLoading(true);
+      try {
+        await deleteProduct(productToDelete);
+        await fetchProducts(); // Refresh products
+      } catch (error) {
+        console.error('Failed to delete product:', error);
+      } finally {
+        setLoading(false);
+        setShowDeleteModal(false);
+        setProductToDelete(null);
+      }
     }
   };
 
   const handleAddProduct = () => {
-    setShowAddModal(true);
-  };
-
-  const handleSaveProduct = () => {
-    // In a real app, this would call the API
-    console.log('Adding product:', newProduct);
-    setShowAddModal(false);
     setNewProduct({
       name: '',
       description: '',
       price: '',
+      originalPrice: '',
       brand: '',
       category: '',
       condition: 'good',
       stockCount: '',
-      images: ['']
+      images: [''],
+      specifications: {},
+      featured: false
     });
+    setShowAddModal(true);
+  };
+
+  const handleEditProduct = (product: any) => {
+    setProductToEdit(product);
+    setNewProduct({
+      name: product.name,
+      description: product.description,
+      price: product.price.toString(),
+      originalPrice: product.originalPrice?.toString() || '',
+      brand: product.brand,
+      category: product.category,
+      condition: product.condition,
+      stockCount: product.stockCount.toString(),
+      images: product.images,
+      specifications: product.specifications || {},
+      featured: product.featured || false
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveProduct = async () => {
+    if (!newProduct.name || !newProduct.price || !newProduct.category) return;
+    
+    setLoading(true);
+    try {
+      const productData = {
+        name: newProduct.name,
+        description: newProduct.description,
+        price: parseFloat(newProduct.price),
+        originalPrice: newProduct.originalPrice ? parseFloat(newProduct.originalPrice) : undefined,
+        brand: newProduct.brand,
+        category: newProduct.category,
+        condition: newProduct.condition as 'excellent' | 'good' | 'fair' | 'refurbished',
+        stockCount: parseInt(newProduct.stockCount),
+        inStock: parseInt(newProduct.stockCount) > 0,
+        images: newProduct.images.filter(img => img.trim() !== ''),
+        specifications: newProduct.specifications,
+        featured: newProduct.featured,
+        rating: 4.5,
+        reviewCount: 0
+      };
+
+      await addProduct(productData);
+      await fetchProducts(); // Refresh products
+      setShowAddModal(false);
+      setNewProduct({
+        name: '',
+        description: '',
+        price: '',
+        originalPrice: '',
+        brand: '',
+        category: '',
+        condition: 'good',
+        stockCount: '',
+        images: [''],
+        specifications: {},
+        featured: false
+      });
+    } catch (error) {
+      console.error('Failed to add product:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateProduct = async () => {
+    if (!newProduct.name || !newProduct.price || !newProduct.category || !productToEdit) return;
+    
+    setLoading(true);
+    try {
+      const productData = {
+        name: newProduct.name,
+        description: newProduct.description,
+        price: parseFloat(newProduct.price),
+        originalPrice: newProduct.originalPrice ? parseFloat(newProduct.originalPrice) : undefined,
+        brand: newProduct.brand,
+        category: newProduct.category,
+        condition: newProduct.condition as 'excellent' | 'good' | 'fair' | 'refurbished',
+        stockCount: parseInt(newProduct.stockCount),
+        inStock: parseInt(newProduct.stockCount) > 0,
+        images: newProduct.images.filter(img => img.trim() !== ''),
+        specifications: newProduct.specifications,
+        featured: newProduct.featured
+      };
+
+      await updateProduct(productToEdit.id, productData);
+      await fetchProducts(); // Refresh products
+      setShowEditModal(false);
+      setProductToEdit(null);
+      setNewProduct({
+        name: '',
+        description: '',
+        price: '',
+        originalPrice: '',
+        brand: '',
+        category: '',
+        condition: 'good',
+        stockCount: '',
+        images: [''],
+        specifications: {},
+        featured: false
+      });
+    } catch (error) {
+      console.error('Failed to update product:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const lowStockProducts = products.filter(p => p.stockCount < 5);
@@ -160,7 +283,7 @@ const ProductManagementPage: React.FC = () => {
             >
               <option value="all">All Categories</option>
               {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
+                <option key={category.id} value={category.name}>{category.name}</option>
               ))}
             </select>
           </div>
@@ -208,7 +331,7 @@ const ProductManagementPage: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <img
-                        src={product.images[0]}
+                        src={product.images[0] || 'https://images.pexels.com/photos/699122/pexels-photo-699122.jpeg?auto=compress&cs=tinysrgb&w=400'}
                         alt={product.name}
                         className="w-12 h-12 object-cover rounded-lg mr-4"
                       />
@@ -257,7 +380,11 @@ const ProductManagementPage: React.FC = () => {
                       <Button variant="ghost" size="sm">
                         <Eye className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleEditProduct(product)}
+                      >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button 
@@ -315,10 +442,28 @@ const ProductManagementPage: React.FC = () => {
             <Input
               label="Price ($)"
               type="number"
+              step="0.01"
               value={newProduct.price}
               onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
               placeholder="0.00"
             />
+            <Input
+              label="Original Price ($)"
+              type="number"
+              step="0.01"
+              value={newProduct.originalPrice}
+              onChange={(e) => setNewProduct({ ...newProduct, originalPrice: e.target.value })}
+              placeholder="0.00"
+            />
+            <Input
+              label="Stock Count"
+              type="number"
+              value={newProduct.stockCount}
+              onChange={(e) => setNewProduct({ ...newProduct, stockCount: e.target.value })}
+              placeholder="0"
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Category
@@ -330,7 +475,7 @@ const ProductManagementPage: React.FC = () => {
               >
                 <option value="">Select category</option>
                 {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
+                  <option key={category.id} value={category.name}>{category.name}</option>
                 ))}
               </select>
             </div>
@@ -350,20 +495,23 @@ const ProductManagementPage: React.FC = () => {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Stock Count"
-              type="number"
-              value={newProduct.stockCount}
-              onChange={(e) => setNewProduct({ ...newProduct, stockCount: e.target.value })}
-              placeholder="0"
+          <Input
+            label="Image URL"
+            value={newProduct.images[0]}
+            onChange={(e) => setNewProduct({ ...newProduct, images: [e.target.value] })}
+            placeholder="Enter image URL"
+          />
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="featured"
+              checked={newProduct.featured}
+              onChange={(e) => setNewProduct({ ...newProduct, featured: e.target.checked })}
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
             />
-            <Input
-              label="Image URL"
-              value={newProduct.images[0]}
-              onChange={(e) => setNewProduct({ ...newProduct, images: [e.target.value] })}
-              placeholder="Enter image URL"
-            />
+            <label htmlFor="featured" className="ml-2 text-sm text-gray-700">
+              Featured Product
+            </label>
           </div>
           <div className="flex space-x-4 justify-end">
             <Button
@@ -374,9 +522,139 @@ const ProductManagementPage: React.FC = () => {
             </Button>
             <Button
               onClick={handleSaveProduct}
-              disabled={!newProduct.name || !newProduct.price || !newProduct.category}
+              disabled={!newProduct.name || !newProduct.price || !newProduct.category || loading}
+              loading={loading}
             >
+              <Save className="w-4 h-4 mr-2" />
               Add Product
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Product Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Product"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Product Name"
+              value={newProduct.name}
+              onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+              placeholder="Enter product name"
+            />
+            <Input
+              label="Brand"
+              value={newProduct.brand}
+              onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })}
+              placeholder="Enter brand name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <textarea
+              value={newProduct.description}
+              onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+              placeholder="Enter product description"
+              className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              rows={3}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Input
+              label="Price ($)"
+              type="number"
+              step="0.01"
+              value={newProduct.price}
+              onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+              placeholder="0.00"
+            />
+            <Input
+              label="Original Price ($)"
+              type="number"
+              step="0.01"
+              value={newProduct.originalPrice}
+              onChange={(e) => setNewProduct({ ...newProduct, originalPrice: e.target.value })}
+              placeholder="0.00"
+            />
+            <Input
+              label="Stock Count"
+              type="number"
+              value={newProduct.stockCount}
+              onChange={(e) => setNewProduct({ ...newProduct, stockCount: e.target.value })}
+              placeholder="0"
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Category
+              </label>
+              <select
+                value={newProduct.category}
+                onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              >
+                <option value="">Select category</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.name}>{category.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Condition
+              </label>
+              <select
+                value={newProduct.condition}
+                onChange={(e) => setNewProduct({ ...newProduct, condition: e.target.value })}
+                className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              >
+                <option value="excellent">Excellent</option>
+                <option value="good">Good</option>
+                <option value="fair">Fair</option>
+                <option value="refurbished">Refurbished</option>
+              </select>
+            </div>
+          </div>
+          <Input
+            label="Image URL"
+            value={newProduct.images[0]}
+            onChange={(e) => setNewProduct({ ...newProduct, images: [e.target.value] })}
+            placeholder="Enter image URL"
+          />
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="featured-edit"
+              checked={newProduct.featured}
+              onChange={(e) => setNewProduct({ ...newProduct, featured: e.target.checked })}
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <label htmlFor="featured-edit" className="ml-2 text-sm text-gray-700">
+              Featured Product
+            </label>
+          </div>
+          <div className="flex space-x-4 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateProduct}
+              disabled={!newProduct.name || !newProduct.price || !newProduct.category || loading}
+              loading={loading}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Update Product
             </Button>
           </div>
         </div>
@@ -402,7 +680,9 @@ const ProductManagementPage: React.FC = () => {
             <Button
               variant="danger"
               onClick={confirmDelete}
+              loading={loading}
             >
+              <Trash2 className="w-4 h-4 mr-2" />
               Delete Product
             </Button>
           </div>

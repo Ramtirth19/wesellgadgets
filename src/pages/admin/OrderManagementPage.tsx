@@ -8,24 +8,29 @@ import {
   Truck, 
   CheckCircle,
   Clock,
-  X
+  X,
+  Edit,
+  Save
 } from 'lucide-react';
 import { useAdminStore } from '../../store';
-import { mockOrders } from '../../data/mockData';
 import { formatPrice, formatDate } from '../../utils/format';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
+import Modal from '../../components/ui/Modal';
 
 const OrderManagementPage: React.FC = () => {
-  const { orders, setOrders, updateOrderStatus } = useAdminStore();
+  const { orders, fetchOrders, updateOrderStatus } = useAdminStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setOrders(mockOrders);
-  }, [setOrders]);
+    fetchOrders();
+  }, [fetchOrders]);
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -64,6 +69,23 @@ const OrderManagementPage: React.FC = () => {
     }
   };
 
+  const handleStatusUpdate = async (orderId: string, newStatus: string) => {
+    setLoading(true);
+    try {
+      await updateOrderStatus(orderId, newStatus);
+      await fetchOrders(); // Refresh orders
+    } catch (error) {
+      console.error('Failed to update order status:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewOrder = (order: any) => {
+    setSelectedOrder(order);
+    setShowOrderModal(true);
+  };
+
   const statusCounts = {
     all: orders.length,
     pending: orders.filter(o => o.status === 'pending').length,
@@ -84,7 +106,7 @@ const OrderManagementPage: React.FC = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         {Object.entries(statusCounts).map(([status, count]) => (
           <Card key={status} className="p-4">
             <div className="text-center">
@@ -191,7 +213,8 @@ const OrderManagementPage: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select
                       value={order.status}
-                      onChange={(e) => updateOrderStatus(order.id, e.target.value as any)}
+                      onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                      disabled={loading}
                       className="text-sm rounded-lg border-gray-300 focus:border-primary-500 focus:ring-primary-500"
                     >
                       <option value="pending">Pending</option>
@@ -202,7 +225,11 @@ const OrderManagementPage: React.FC = () => {
                     </select>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Button variant="ghost" size="sm">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleViewOrder(order)}
+                    >
                       <Eye className="w-4 h-4" />
                     </Button>
                   </td>
@@ -212,6 +239,84 @@ const OrderManagementPage: React.FC = () => {
           </table>
         </div>
       </Card>
+
+      {/* Order Details Modal */}
+      <Modal
+        isOpen={showOrderModal}
+        onClose={() => setShowOrderModal(false)}
+        title={`Order #${selectedOrder?.id}`}
+        size="lg"
+      >
+        {selectedOrder && (
+          <div className="space-y-6">
+            {/* Order Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Information</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Order ID:</span>
+                    <span className="font-medium">#{selectedOrder.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Date:</span>
+                    <span className="font-medium">{formatDate(selectedOrder.createdAt)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Status:</span>
+                    <Badge variant={getStatusColor(selectedOrder.status) as any}>
+                      {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total:</span>
+                    <span className="font-bold text-lg">{formatPrice(selectedOrder.total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Shipping Address</h3>
+                <div className="text-gray-600">
+                  <p className="font-medium text-gray-900">{selectedOrder.shippingAddress.name}</p>
+                  <p>{selectedOrder.shippingAddress.address}</p>
+                  <p>{selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.zipCode}</p>
+                  <p>{selectedOrder.shippingAddress.country}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Order Items */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Items</h3>
+              <div className="space-y-4">
+                {selectedOrder.items.map((item: any, index: number) => (
+                  <div key={index} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                    <img
+                      src={item.product.images?.[0] || 'https://images.pexels.com/photos/699122/pexels-photo-699122.jpeg?auto=compress&cs=tinysrgb&w=400'}
+                      alt={item.product.name}
+                      className="w-16 h-16 object-cover rounded-lg"
+                    />
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{item.product.name}</h4>
+                      <p className="text-sm text-gray-500">{item.product.brand}</p>
+                      <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-gray-900">
+                        {formatPrice(item.product.price * item.quantity)}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {formatPrice(item.product.price)} each
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

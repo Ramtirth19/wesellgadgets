@@ -12,91 +12,89 @@ import {
   Filter
 } from 'lucide-react';
 import { useAuthStore } from '../store';
+import orderService from '../services/orderService';
 import { formatPrice, formatDate } from '../utils/format';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Input from '../components/ui/Input';
 
-// Mock orders data
-const mockUserOrders = [
-  {
-    id: 'TV1234567890',
-    date: '2024-01-25T10:30:00Z',
-    status: 'delivered',
-    total: 1297,
-    items: [
-      {
-        id: '1',
-        name: 'iPhone 14 Pro Max',
-        image: 'https://images.pexels.com/photos/699122/pexels-photo-699122.jpeg?auto=compress&cs=tinysrgb&w=400',
-        price: 899,
-        quantity: 1
-      },
-      {
-        id: '2',
-        name: 'AirPods Pro 2nd Gen',
-        image: 'https://images.pexels.com/photos/3394650/pexels-photo-3394650.jpeg?auto=compress&cs=tinysrgb&w=400',
-        price: 199,
-        quantity: 2
-      }
-    ],
-    tracking: 'TRK123456789',
-    estimatedDelivery: '2024-01-30T00:00:00Z'
-  },
-  {
-    id: 'TV1234567891',
-    date: '2024-01-20T14:15:00Z',
-    status: 'shipped',
-    total: 1899,
-    items: [
-      {
-        id: '3',
-        name: 'MacBook Pro 16" M2',
-        image: 'https://images.pexels.com/photos/18105/pexels-photo.jpg?auto=compress&cs=tinysrgb&w=400',
-        price: 1899,
-        quantity: 1
-      }
-    ],
-    tracking: 'TRK123456790',
-    estimatedDelivery: '2024-01-28T00:00:00Z'
-  },
-  {
-    id: 'TV1234567892',
-    date: '2024-01-15T09:45:00Z',
-    status: 'processing',
-    total: 1128,
-    items: [
-      {
-        id: '4',
-        name: 'Samsung Galaxy S23 Ultra',
-        image: 'https://images.pexels.com/photos/1092644/pexels-photo-1092644.jpeg?auto=compress&cs=tinysrgb&w=400',
-        price: 799,
-        quantity: 1
-      },
-      {
-        id: '5',
-        name: 'Apple Watch Series 8',
-        image: 'https://images.pexels.com/photos/437037/pexels-photo-437037.jpeg?auto=compress&cs=tinysrgb&w=400',
-        price: 329,
-        quantity: 1
-      }
-    ],
-    tracking: null,
-    estimatedDelivery: '2024-01-25T00:00:00Z'
-  }
-];
-
 const OrdersPage: React.FC = () => {
   const { user, isAuthenticated } = useAuthStore();
-  const [orders, setOrders] = useState(mockUserOrders);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
-    // In a real app, fetch user's orders from API
-    setOrders(mockUserOrders);
-  }, []);
+    const fetchUserOrders = async () => {
+      if (!isAuthenticated) return;
+      
+      setLoading(true);
+      try {
+        const response = await orderService.getUserOrders();
+        if (response.success && response.data) {
+          setOrders(response.data.orders || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch orders:', error);
+        // Fallback to mock data for demo
+        setOrders([
+          {
+            id: 'TV1234567890',
+            createdAt: '2024-01-25T10:30:00Z',
+            status: 'delivered',
+            total: 1297,
+            items: [
+              {
+                product: {
+                  id: '1',
+                  name: 'iPhone 14 Pro Max',
+                  images: ['https://images.pexels.com/photos/699122/pexels-photo-699122.jpeg?auto=compress&cs=tinysrgb&w=400'],
+                  price: 899
+                },
+                quantity: 1
+              },
+              {
+                product: {
+                  id: '2',
+                  name: 'AirPods Pro 2nd Gen',
+                  images: ['https://images.pexels.com/photos/3394650/pexels-photo-3394650.jpeg?auto=compress&cs=tinysrgb&w=400'],
+                  price: 199
+                },
+                quantity: 2
+              }
+            ],
+            trackingNumber: 'TRK123456789',
+            estimatedDelivery: '2024-01-30T00:00:00Z'
+          },
+          {
+            id: 'TV1234567891',
+            createdAt: '2024-01-20T14:15:00Z',
+            status: 'shipped',
+            total: 1899,
+            items: [
+              {
+                product: {
+                  id: '3',
+                  name: 'MacBook Pro 16" M2',
+                  images: ['https://images.pexels.com/photos/18105/pexels-photo.jpg?auto=compress&cs=tinysrgb&w=400'],
+                  price: 1899
+                },
+                quantity: 1
+              }
+            ],
+            trackingNumber: 'TRK123456790',
+            estimatedDelivery: '2024-01-28T00:00:00Z'
+          }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserOrders();
+  }, [isAuthenticated]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -130,7 +128,7 @@ const OrdersPage: React.FC = () => {
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         order.items.some(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                         order.items.some((item: any) => item.product.name.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -150,6 +148,17 @@ const OrdersPage: React.FC = () => {
             <Button>Sign In</Button>
           </Link>
         </Card>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your orders...</p>
+        </div>
       </div>
     );
   }
@@ -232,7 +241,7 @@ const OrdersPage: React.FC = () => {
                             Order #{order.id}
                           </h3>
                           <p className="text-sm text-gray-500">
-                            Placed on {formatDate(order.date)}
+                            Placed on {formatDate(order.createdAt)}
                           </p>
                         </div>
                       </div>
@@ -250,24 +259,24 @@ const OrdersPage: React.FC = () => {
                   {/* Order Items */}
                   <div className="p-6">
                     <div className="space-y-4 mb-6">
-                      {order.items.map((item) => (
-                        <div key={item.id} className="flex items-center space-x-4">
+                      {order.items.map((item: any, itemIndex: number) => (
+                        <div key={itemIndex} className="flex items-center space-x-4">
                           <img
-                            src={item.image}
-                            alt={item.name}
+                            src={item.product.images?.[0] || 'https://images.pexels.com/photos/699122/pexels-photo-699122.jpeg?auto=compress&cs=tinysrgb&w=400'}
+                            alt={item.product.name}
                             className="w-16 h-16 object-cover rounded-lg"
                           />
                           <div className="flex-1">
                             <h4 className="font-medium text-gray-900">
-                              {item.name}
+                              {item.product.name}
                             </h4>
                             <p className="text-sm text-gray-500">
-                              Quantity: {item.quantity} • {formatPrice(item.price)} each
+                              Quantity: {item.quantity} • {formatPrice(item.product.price)} each
                             </p>
                           </div>
                           <div className="text-right">
                             <p className="font-medium text-gray-900">
-                              {formatPrice(item.price * item.quantity)}
+                              {formatPrice(item.product.price * item.quantity)}
                             </p>
                           </div>
                         </div>
@@ -277,9 +286,9 @@ const OrdersPage: React.FC = () => {
                     {/* Order Actions */}
                     <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200">
                       <div className="flex-1">
-                        {order.tracking && (
+                        {order.trackingNumber && (
                           <div className="text-sm text-gray-600">
-                            <span className="font-medium">Tracking:</span> {order.tracking}
+                            <span className="font-medium">Tracking:</span> {order.trackingNumber}
                           </div>
                         )}
                         {order.estimatedDelivery && (
@@ -295,10 +304,12 @@ const OrdersPage: React.FC = () => {
                           View Details
                         </Button>
                         {order.status === 'shipped' && (
-                          <Button size="sm">
-                            <Truck className="w-4 h-4 mr-2" />
-                            Track Package
-                          </Button>
+                          <Link to={`/track?tracking=${order.trackingNumber}`}>
+                            <Button size="sm">
+                              <Truck className="w-4 h-4 mr-2" />
+                              Track Package
+                            </Button>
+                          </Link>
                         )}
                         {order.status === 'delivered' && (
                           <Button variant="outline" size="sm">

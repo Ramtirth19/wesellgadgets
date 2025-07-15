@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Search, 
@@ -12,7 +12,8 @@ import {
   Shield,
   User,
   Crown,
-  Ban
+  Ban,
+  Save
 } from 'lucide-react';
 import { formatDate } from '../../utils/format';
 import Button from '../../components/ui/Button';
@@ -21,7 +22,7 @@ import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 
-// Mock user data
+// Mock user data - In real app, this would come from API
 const mockUsers = [
   {
     id: '1',
@@ -82,8 +83,19 @@ const UserManagementPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [userToEdit, setUserToEdit] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'customer',
+    status: 'active'
+  });
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -98,12 +110,111 @@ const UserManagementPage: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (userToDelete) {
-      setUsers(users.filter(user => user.id !== userToDelete));
-      setShowDeleteModal(false);
-      setUserToDelete(null);
+      setLoading(true);
+      try {
+        // In real app, call API to delete user
+        setUsers(users.filter(user => user.id !== userToDelete));
+        setShowDeleteModal(false);
+        setUserToDelete(null);
+      } catch (error) {
+        console.error('Failed to delete user:', error);
+      } finally {
+        setLoading(false);
+      }
     }
+  };
+
+  const handleAddUser = () => {
+    setNewUser({
+      name: '',
+      email: '',
+      phone: '',
+      role: 'customer',
+      status: 'active'
+    });
+    setShowAddModal(true);
+  };
+
+  const handleEditUser = (user: any) => {
+    setUserToEdit(user);
+    setNewUser({
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      status: user.status
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveUser = async () => {
+    if (!newUser.name || !newUser.email) return;
+    
+    setLoading(true);
+    try {
+      // In real app, call API to create user
+      const userData = {
+        ...newUser,
+        id: Date.now().toString(),
+        joinDate: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        totalOrders: 0,
+        totalSpent: 0,
+        avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100'
+      };
+
+      setUsers([...users, userData]);
+      setShowAddModal(false);
+      setNewUser({
+        name: '',
+        email: '',
+        phone: '',
+        role: 'customer',
+        status: 'active'
+      });
+    } catch (error) {
+      console.error('Failed to add user:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateUser = async () => {
+    if (!newUser.name || !newUser.email || !userToEdit) return;
+    
+    setLoading(true);
+    try {
+      // In real app, call API to update user
+      setUsers(users.map(user => 
+        user.id === userToEdit.id 
+          ? { ...user, ...newUser }
+          : user
+      ));
+      setShowEditModal(false);
+      setUserToEdit(null);
+      setNewUser({
+        name: '',
+        email: '',
+        phone: '',
+        role: 'customer',
+        status: 'active'
+      });
+    } catch (error) {
+      console.error('Failed to update user:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusToggle = async (userId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    setUsers(users.map(user => 
+      user.id === userId 
+        ? { ...user, status: newStatus }
+        : user
+    ));
   };
 
   const getRoleIcon = (role: string) => {
@@ -156,7 +267,7 @@ const UserManagementPage: React.FC = () => {
             Manage customer accounts and administrators
           </p>
         </div>
-        <Button>
+        <Button onClick={handleAddUser}>
           <UserPlus className="w-5 h-5 mr-2" />
           Add User
         </Button>
@@ -333,18 +444,21 @@ const UserManagementPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end space-x-2">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleEditUser(user)}
+                      >
                         <Edit className="w-4 h-4" />
                       </Button>
-                      {user.status === 'active' ? (
-                        <Button variant="ghost" size="sm" className="text-warning-600">
-                          <Ban className="w-4 h-4" />
-                        </Button>
-                      ) : (
-                        <Button variant="ghost" size="sm" className="text-success-600">
-                          <Shield className="w-4 h-4" />
-                        </Button>
-                      )}
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className={user.status === 'active' ? 'text-warning-600' : 'text-success-600'}
+                        onClick={() => handleStatusToggle(user.id, user.status)}
+                      >
+                        {user.status === 'active' ? <Ban className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                      </Button>
                       <Button 
                         variant="ghost" 
                         size="sm"
@@ -361,6 +475,153 @@ const UserManagementPage: React.FC = () => {
           </table>
         </div>
       </Card>
+
+      {/* Add User Modal */}
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add New User"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Full Name"
+            value={newUser.name}
+            onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+            placeholder="Enter full name"
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={newUser.email}
+            onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+            placeholder="Enter email address"
+          />
+          <Input
+            label="Phone"
+            value={newUser.phone}
+            onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+            placeholder="Enter phone number"
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Role
+              </label>
+              <select
+                value={newUser.role}
+                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              >
+                <option value="customer">Customer</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Status
+              </label>
+              <select
+                value={newUser.status}
+                onChange={(e) => setNewUser({ ...newUser, status: e.target.value })}
+                className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex space-x-4 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveUser}
+              disabled={!newUser.name || !newUser.email || loading}
+              loading={loading}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Add User
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit User Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit User"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Full Name"
+            value={newUser.name}
+            onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+            placeholder="Enter full name"
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={newUser.email}
+            onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+            placeholder="Enter email address"
+          />
+          <Input
+            label="Phone"
+            value={newUser.phone}
+            onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+            placeholder="Enter phone number"
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Role
+              </label>
+              <select
+                value={newUser.role}
+                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              >
+                <option value="customer">Customer</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Status
+              </label>
+              <select
+                value={newUser.status}
+                onChange={(e) => setNewUser({ ...newUser, status: e.target.value })}
+                className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="banned">Banned</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex space-x-4 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateUser}
+              disabled={!newUser.name || !newUser.email || loading}
+              loading={loading}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Update User
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal
@@ -383,7 +644,9 @@ const UserManagementPage: React.FC = () => {
             <Button
               variant="danger"
               onClick={confirmDelete}
+              loading={loading}
             >
+              <Trash2 className="w-4 h-4 mr-2" />
               Delete User
             </Button>
           </div>

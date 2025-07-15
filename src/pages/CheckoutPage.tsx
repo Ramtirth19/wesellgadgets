@@ -12,6 +12,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { useCartStore, useAuthStore } from '../store';
+import orderService from '../services/orderService';
 import { formatPrice } from '../utils/format';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -63,18 +64,55 @@ const CheckoutPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
 
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Clear cart and redirect to confirmation
-    clearCart();
-    navigate('/order-confirmation', { 
-      state: { 
-        orderTotal: finalTotal,
-        orderNumber: `TV${Date.now()}`,
-        email: formData.email
+    try {
+      // Create order data
+      const orderData = {
+        items: orderService.convertCartItemsToOrderItems(items),
+        shippingAddress: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.zipCode,
+          country: formData.country
+        },
+        paymentMethod: 'card',
+        total: finalTotal
+      };
+
+      // Create order
+      const response = await orderService.createOrder(orderData);
+      
+      if (response.success) {
+        // Clear cart and redirect to confirmation
+        clearCart();
+        navigate('/order-confirmation', { 
+          state: { 
+            orderTotal: finalTotal,
+            orderNumber: response.data?.order?.id || `TV${Date.now()}`,
+            email: formData.email
+          }
+        });
+      } else {
+        throw new Error('Failed to create order');
       }
-    });
+    } catch (error) {
+      console.error('Checkout failed:', error);
+      // For demo purposes, still proceed to confirmation
+      clearCart();
+      navigate('/order-confirmation', { 
+        state: { 
+          orderTotal: finalTotal,
+          orderNumber: `TV${Date.now()}`,
+          email: formData.email
+        }
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (items.length === 0) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Plus, 
@@ -6,7 +6,9 @@ import {
   Edit, 
   Trash2, 
   FolderOpen,
-  Image
+  Image,
+  Save,
+  X
 } from 'lucide-react';
 import { useProductStore, useAdminStore } from '../../store';
 import Button from '../../components/ui/Button';
@@ -15,18 +17,25 @@ import Card from '../../components/ui/Card';
 import Modal from '../../components/ui/Modal';
 
 const CategoryManagementPage: React.FC = () => {
-  const { categories } = useProductStore();
-  const { deleteCategory } = useAdminStore();
+  const { categories, fetchCategories } = useProductStore();
+  const { addCategory, updateCategory, deleteCategory } = useAdminStore();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+  const [categoryToEdit, setCategoryToEdit] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
   const [newCategory, setNewCategory] = useState({
     name: '',
     description: '',
     image: ''
   });
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   const filteredCategories = categories.filter(category =>
     category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -38,24 +47,83 @@ const CategoryManagementPage: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (categoryToDelete) {
-      deleteCategory(categoryToDelete);
-      setShowDeleteModal(false);
-      setCategoryToDelete(null);
+      setLoading(true);
+      try {
+        await deleteCategory(categoryToDelete);
+        await fetchCategories(); // Refresh categories
+      } catch (error) {
+        console.error('Failed to delete category:', error);
+      } finally {
+        setLoading(false);
+        setShowDeleteModal(false);
+        setCategoryToDelete(null);
+      }
     }
   };
 
   const handleAddCategory = () => {
+    setNewCategory({ name: '', description: '', image: '' });
     setShowAddModal(true);
   };
 
-  const handleSaveCategory = () => {
-    // In a real app, this would call the API
-    console.log('Adding category:', newCategory);
-    setShowAddModal(false);
-    setNewCategory({ name: '', description: '', image: '' });
+  const handleEditCategory = (category: any) => {
+    setCategoryToEdit(category);
+    setNewCategory({
+      name: category.name,
+      description: category.description,
+      image: category.image
+    });
+    setShowEditModal(true);
   };
+
+  const handleSaveCategory = async () => {
+    if (!newCategory.name || !newCategory.description) return;
+    
+    setLoading(true);
+    try {
+      const categoryData = {
+        ...newCategory,
+        slug: newCategory.name.toLowerCase().replace(/\s+/g, '-'),
+        productCount: 0
+      };
+
+      await addCategory(categoryData);
+      await fetchCategories(); // Refresh categories
+      setShowAddModal(false);
+      setNewCategory({ name: '', description: '', image: '' });
+    } catch (error) {
+      console.error('Failed to add category:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateCategory = async () => {
+    if (!newCategory.name || !newCategory.description || !categoryToEdit) return;
+    
+    setLoading(true);
+    try {
+      const categoryData = {
+        ...newCategory,
+        slug: newCategory.name.toLowerCase().replace(/\s+/g, '-')
+      };
+
+      await updateCategory(categoryToEdit.id, categoryData);
+      await fetchCategories(); // Refresh categories
+      setShowEditModal(false);
+      setCategoryToEdit(null);
+      setNewCategory({ name: '', description: '', image: '' });
+    } catch (error) {
+      console.error('Failed to update category:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalProducts = categories.reduce((sum, cat) => sum + (cat.productCount || 0), 0);
+  const avgProductsPerCategory = categories.length > 0 ? Math.round(totalProducts / categories.length) : 0;
 
   return (
     <div className="space-y-8">
@@ -88,9 +156,7 @@ const CategoryManagementPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Products</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {categories.reduce((sum, cat) => sum + cat.productCount, 0)}
-              </p>
+              <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
             </div>
             <FolderOpen className="w-8 h-8 text-success-600" />
           </div>
@@ -99,9 +165,7 @@ const CategoryManagementPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Avg Products/Category</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {categories.length > 0 ? Math.round(categories.reduce((sum, cat) => sum + cat.productCount, 0) / categories.length) : 0}
-              </p>
+              <p className="text-2xl font-bold text-gray-900">{avgProductsPerCategory}</p>
             </div>
             <FolderOpen className="w-8 h-8 text-accent-600" />
           </div>
@@ -130,18 +194,22 @@ const CategoryManagementPage: React.FC = () => {
             <Card className="overflow-hidden group">
               <div className="relative h-48">
                 <img
-                  src={category.image}
+                  src={category.image || 'https://images.pexels.com/photos/699122/pexels-photo-699122.jpeg?auto=compress&cs=tinysrgb&w=400'}
                   alt={category.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <div className="absolute bottom-4 left-4 text-white">
                   <h3 className="text-lg font-bold">{category.name}</h3>
-                  <p className="text-sm opacity-90">{category.productCount} products</p>
+                  <p className="text-sm opacity-90">{category.productCount || 0} products</p>
                 </div>
                 <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="flex space-x-2">
-                    <Button variant="secondary" size="sm">
+                    <Button 
+                      variant="secondary" 
+                      size="sm"
+                      onClick={() => handleEditCategory(category)}
+                    >
                       <Edit className="w-4 h-4" />
                     </Button>
                     <Button 
@@ -163,7 +231,7 @@ const CategoryManagementPage: React.FC = () => {
                 </p>
                 <div className="flex items-center justify-between text-sm text-gray-500">
                   <span>Slug: {category.slug}</span>
-                  <span>{category.productCount} items</span>
+                  <span>{category.productCount || 0} items</span>
                 </div>
               </div>
             </Card>
@@ -211,9 +279,61 @@ const CategoryManagementPage: React.FC = () => {
             </Button>
             <Button
               onClick={handleSaveCategory}
-              disabled={!newCategory.name || !newCategory.description}
+              disabled={!newCategory.name || !newCategory.description || loading}
+              loading={loading}
             >
+              <Save className="w-4 h-4 mr-2" />
               Add Category
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Category Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Category"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Category Name"
+            value={newCategory.name}
+            onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+            placeholder="Enter category name"
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <textarea
+              value={newCategory.description}
+              onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
+              placeholder="Enter category description"
+              className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              rows={3}
+            />
+          </div>
+          <Input
+            label="Image URL"
+            value={newCategory.image}
+            onChange={(e) => setNewCategory({ ...newCategory, image: e.target.value })}
+            placeholder="Enter image URL"
+          />
+          <div className="flex space-x-4 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateCategory}
+              disabled={!newCategory.name || !newCategory.description || loading}
+              loading={loading}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Update Category
             </Button>
           </div>
         </div>
@@ -240,7 +360,9 @@ const CategoryManagementPage: React.FC = () => {
             <Button
               variant="danger"
               onClick={confirmDelete}
+              loading={loading}
             >
+              <Trash2 className="w-4 h-4 mr-2" />
               Delete Category
             </Button>
           </div>
