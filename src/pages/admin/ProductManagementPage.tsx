@@ -24,8 +24,19 @@ const ProductManagementPage: React.FC = () => {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    description: '',
+    price: '',
+    brand: '',
+    category: '',
+    condition: 'good',
+    stockCount: '',
+    images: ['']
+  });
 
   const categories = [...new Set(products.map(p => p.category))];
   
@@ -49,6 +60,26 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
+  const handleAddProduct = () => {
+    setShowAddModal(true);
+  };
+
+  const handleSaveProduct = () => {
+    // In a real app, this would call the API
+    console.log('Adding product:', newProduct);
+    setShowAddModal(false);
+    setNewProduct({
+      name: '',
+      description: '',
+      price: '',
+      brand: '',
+      category: '',
+      condition: 'good',
+      stockCount: '',
+      images: ['']
+    });
+  };
+
   const lowStockProducts = products.filter(p => p.stockCount < 5);
 
   return (
@@ -61,7 +92,7 @@ const ProductManagementPage: React.FC = () => {
             Manage your product inventory and listings
           </p>
         </div>
-        <Button>
+        <Button onClick={handleAddProduct}>
           <Plus className="w-5 h-5 mr-2" />
           Add Product
         </Button>
@@ -245,6 +276,111 @@ const ProductManagementPage: React.FC = () => {
           </table>
         </div>
       </Card>
+
+      {/* Add Product Modal */}
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add New Product"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Product Name"
+              value={newProduct.name}
+              onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+              placeholder="Enter product name"
+            />
+            <Input
+              label="Brand"
+              value={newProduct.brand}
+              onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })}
+              placeholder="Enter brand name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <textarea
+              value={newProduct.description}
+              onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+              placeholder="Enter product description"
+              className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              rows={3}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Input
+              label="Price ($)"
+              type="number"
+              value={newProduct.price}
+              onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+              placeholder="0.00"
+            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Category
+              </label>
+              <select
+                value={newProduct.category}
+                onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              >
+                <option value="">Select category</option>
+                {categories.map(category => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Condition
+              </label>
+              <select
+                value={newProduct.condition}
+                onChange={(e) => setNewProduct({ ...newProduct, condition: e.target.value })}
+                className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              >
+                <option value="excellent">Excellent</option>
+                <option value="good">Good</option>
+                <option value="fair">Fair</option>
+                <option value="refurbished">Refurbished</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Stock Count"
+              type="number"
+              value={newProduct.stockCount}
+              onChange={(e) => setNewProduct({ ...newProduct, stockCount: e.target.value })}
+              placeholder="0"
+            />
+            <Input
+              label="Image URL"
+              value={newProduct.images[0]}
+              onChange={(e) => setNewProduct({ ...newProduct, images: [e.target.value] })}
+              placeholder="Enter image URL"
+            />
+          </div>
+          <div className="flex space-x-4 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveProduct}
+              disabled={!newProduct.name || !newProduct.price || !newProduct.category}
+            >
+              Add Product
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal

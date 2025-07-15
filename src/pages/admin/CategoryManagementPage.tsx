@@ -19,8 +19,14 @@ const CategoryManagementPage: React.FC = () => {
   const { deleteCategory } = useAdminStore();
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+  const [newCategory, setNewCategory] = useState({
+    name: '',
+    description: '',
+    image: ''
+  });
 
   const filteredCategories = categories.filter(category =>
     category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -40,6 +46,17 @@ const CategoryManagementPage: React.FC = () => {
     }
   };
 
+  const handleAddCategory = () => {
+    setShowAddModal(true);
+  };
+
+  const handleSaveCategory = () => {
+    // In a real app, this would call the API
+    console.log('Adding category:', newCategory);
+    setShowAddModal(false);
+    setNewCategory({ name: '', description: '', image: '' });
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -50,7 +67,7 @@ const CategoryManagementPage: React.FC = () => {
             Organize your products into categories
           </p>
         </div>
-        <Button>
+        <Button onClick={handleAddCategory}>
           <Plus className="w-5 h-5 mr-2" />
           Add Category
         </Button>
@@ -83,7 +100,7 @@ const CategoryManagementPage: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Avg Products/Category</p>
               <p className="text-2xl font-bold text-gray-900">
-                {Math.round(categories.reduce((sum, cat) => sum + cat.productCount, 0) / categories.length)}
+                {categories.length > 0 ? Math.round(categories.reduce((sum, cat) => sum + cat.productCount, 0) / categories.length) : 0}
               </p>
             </div>
             <FolderOpen className="w-8 h-8 text-accent-600" />
@@ -153,6 +170,54 @@ const CategoryManagementPage: React.FC = () => {
           </motion.div>
         ))}
       </div>
+
+      {/* Add Category Modal */}
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add New Category"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Category Name"
+            value={newCategory.name}
+            onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+            placeholder="Enter category name"
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <textarea
+              value={newCategory.description}
+              onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
+              placeholder="Enter category description"
+              className="block w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 py-3 px-4"
+              rows={3}
+            />
+          </div>
+          <Input
+            label="Image URL"
+            value={newCategory.image}
+            onChange={(e) => setNewCategory({ ...newCategory, image: e.target.value })}
+            placeholder="Enter image URL"
+          />
+          <div className="flex space-x-4 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveCategory}
+              disabled={!newCategory.name || !newCategory.description}
+            >
+              Add Category
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal
